@@ -1,0 +1,215 @@
+﻿<?xml version="1.0" encoding="utf-8" standalone="no"?>
+<pkg:Program
+  xsi:schemaLocation="urn:schemas-www-wisware.nl-scriptingpackages ../XmlSchemas.Common.XmlScript/XMLScripting.Packages.xsd"
+  xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+  xmlns="urn:schemas-www-wisware.nl-xmlscripting"
+  xmlns:pkg="urn:schemas-www-wisware.nl-scriptingpackages"
+  xmlns:sys="urn:schemas-www-wisware.nl-xmlscripting"
+  xmlns:ado="urn:schemas-www-wisware.nl-xmlscripting-ado"
+  xmlns:fil="urn:schemas-www-wisware.nl-xmlscripting-filemanagement"
+  xmlns:fwl="urn:schemas-www-wisware.nl-xmlscripting-windowsfirewall"
+  xmlns:inx="urn:schemas-www-wisware.nl-xmlscripting-index"
+  xmlns:lil="urn:schemas-www-wisware.nl-xmlscripting-linkedlist"
+  xmlns:msx="urn:schemas-www-wisware.nl-xmlscripting-xml"
+  xmlns:reg="urn:schemas-www-wisware.nl-xmlscripting-registry"
+  xmlns:rep="urn:schemas-www-wisware.nl-xmlscripting-report"
+  xmlns:sts="urn:schemas-www-wisware.nl-xmlscripting-showstatus"
+  xmlns:syu="urn:schemas-www-wisware.nl-xmlscripting-sysutils"
+  xmlns:sim="urn:schemas-www-wisware.nl-xmlscripting-simulateuserinput"
+  xmlns:stm="urn:schemas-www-wisware.nl-xmlscripting-statemanagement"
+ >
+  <pkg:ReportTargets>
+    <pkg:Target Identifier="Default" Description="Report"/>
+    <pkg:Target Identifier="Measurements" Description="Measurements"/>
+    <pkg:Target Identifier="Visa" Description="Visa report"/>
+  </pkg:ReportTargets>
+  <pkg:Config>
+    <![CDATA[
+[Check]
+; Set to 1 if these are all correct.
+ValidParameters=0
+
+[VISA]
+;powersupply = dns, can be replaced with ip-adress
+PsuRN=TCPIP0::powersupply::inst0::INSTR
+
+[Psu.ChargingChannel]
+Current=1 A
+Voltage=2 V
+Channel=CH1
+
+[Charging]
+BatteryFullVoltageDrop=3 mV
+  ]]>
+  </pkg:Config>
+  <Imports>
+    <Import Identifier="ElectronicUtils" Filename="..\Script.Common.Electronics\ElectronicUtils.xml"/>
+    <Import Identifier="VISAInstrument" Filename="..\Script.Common.VISA\VISA Instrument.xml"/>
+    <Import Identifier="SiglentSPD3303X" Filename="..\Script.Common.VISA\VISA Siglent SPD3303X.xml"/>
+  </Imports>
+  <Uses>
+    <Use Identifier="ElectronicUtils"/>
+    <Use Identifier="VISAInstrument"/>
+    <Use Identifier="SiglentSPD3303X"/>
+  </Uses>
+
+  <Constants>
+    <Constant Identifier="ScriptVersion" Type="string" Expression="'5.2.18'"/>
+    <!-- t (s) = msSettlingTime x 100 ns-->
+    <Constant Identifier="ns100SettlingTime" Type="Integer" Expression="1 * 10000000"/>
+  </Constants>
+
+  <Procedures>
+
+    <Procedure Identifier="Execute">
+      <Variables>
+        <Variable Identifier="PsuRN" Type="string" Init="'TCPIP0::powersupply::inst0::INSTR'"/>
+        <Variable Identifier="PsuChargingChannel" Type="TSPD3303XChannel" Init="TSPD3303XChannel.CH1"/>
+        <Variable Identifier="convChargingChannelCurrent" Type="ConvInt"/>
+        <Variable Identifier="convChargingChannelVoltage" Type="ConvInt"/>
+        <Variable Identifier="convBatteryFullVoltageDrop" Type="ConvInt"/>
+      </Variables>
+
+      <Procedures>
+        <Procedure Identifier="ReadConfig">
+          <Block>
+            <Object.Use Identifier="Ini" Type="TIniHelper" Expression="TIniHelper.Create(ConfigInifile, True)">
+              <Execute Statement="Ini.Section('Check', False)"/>
+              <Variable Identifier="ValidParameters" Type="Boolean" Init="Ini.ReadBool('ValidParameters', False)"/>
+
+              <Execute Statement="Ini.Section('VISA')"/>
+              <Execute Statement="PsuRN:= Ini.ReadString('PsuRN', PsuRN) "/>
+
+              <Object.Use Identifier="Ini" Type="TSiglentSPD3303XIniHelper" Expression="TSiglentSPD3303XIniHelper.Create(Ini.Inifile, Ini.EnableEcho)">
+                <Execute Statement="Ini.Section('Psu.ChargingChannel')"/>
+                <Execute Statement="convChargingChannelCurrent:= Ini.ConvReadCurrent('Current', '1 A')"/>
+                <Execute Statement="convChargingChannelVoltage:= Ini.ConvReadVoltage('Voltage', '2 V')"/>
+                <Execute Statement="PsuChargingChannel:= Ini.ReadSPD3303XChannel('Channel', PsuChargingChannel) "/>
+              </Object.Use>
+              <Execute Statement="Ini.Section('Charging')"/>
+              <Execute Statement="convBatteryFullVoltageDrop:= Ini.ReadConvInt('BatteryFullVoltageDrop', ucActualVoltage, '5 mV')"/>
+
+              <Raise Expression="Exception.Create('Please check the config and set validparameters=1')" Condition="not ValidParameters"/>
+            </Object.Use>
+          </Block>
+        </Procedure>
+
+        <Procedure Identifier="ExecuteChargingLoop">
+          <Block>
+            <Object.Use Identifier="VisaRM" Type="TVisaResourceManager" Expression="TVisaResourceManager.Create">
+              <sts:Status Text="'Connecting to powersupply'"/>
+              <Object.Use Identifier="PsuSession" Type="TVisaResource" Expression="VisaRM.OpenResource(PsuRN, TAccessMode.NO_LOCK, 10000)">
+                <Object.Use Identifier="Psu" Type="TSiglentSPD3303X" Expression="TSiglentSPD3303X.Create(PsuSession)">
+                  <Execute Statement="Psu.Enabled[PsuChargingChannel]:= False"/>
+                  <TryFinally>
+                    <Try>
+                      <sts:Status.Block Text="'Setting powersupply up'" LeaveText="'Done setting powersupply up'">
+                        <Execute Statement="Psu.ConvVoltage[PsuChargingChannel]:= convChargingChannelVoltage"/>
+                        <Execute Statement="Psu.Enabled[PsuChargingChannel]:= True"/>
+                        <rep:Reporter.Information Text="'Charging'" Markup="Header2"/>
+                        <rep:Reporter.Information Text="'Using psu: ' + Psu.IDN"/>
+                        <rep:Reporter.Information Text="''"/>
+                      </sts:Status.Block>
+
+                      <Variable Identifier="StartTicks" Type="UInt64" Init="GetTickCount64"/>
+                      <Variable Identifier="MaxVoltage" Type="ConvInt" Init="0"/>
+                      <sts:Status.Block Text="'Starting to charge'">
+                        <rep:Reporter.Information Text="'Tick'#9'Time'#9'Psu voltage'" Target="Measurements"/>
+                        <RepeatUntilLoop Expression="AbortRequest">
+                          <Variable Identifier="CurrentTicks" Type="UInt64" Init="GetTickCount64"/>
+                          <Variable Identifier="convPsuActualPsuVoltage" Type="ConvInt" Init="Psu.ConvActualVoltage[PsuChargingChannel]"/>
+                          <Variable Identifier="convPsuActualCurrent" Type="ConvInt" Init="Psu.ConvActualCurrent[PsuChargingChannel]"/>
+                          <rep:Reporter.Information Text="Format('%d'#9'%.2f'#9'%s', CurrentTicks, (CurrentTicks - StartTicks)/ 1000, ucActualVoltage.IntValueToEngineeringStr(convPsuActualPsuVoltage, TUnitPostFix.None, DecimalSeparator))" Target="Measurements"/>
+                          <Execute Statement="MaxVoltage:= convPsuActualPsuVoltage" Condition="convPsuActualPsuVoltage &gt; MaxVoltage"/>
+                          <Variable Identifier="convVoltageDrop" Type="ConvInt" Init="MaxVoltage - convPsuActualPsuVoltage"/>
+                          <sts:Status Text="Format('Charge: %s and %s (%s drop)', ucActualVoltage.IntValueToStr(convPsuActualPsuVoltage, TUnitPostFix.Separated, DecimalSeparator, 5), ucActualCurrent.IntValueToStr(convPsuActualCurrent, TUnitPostFix.Separated, DecimalSeparator, 3), ucActualVoltage.IntValueToStr(convVoltageDrop, TUnitPostFix.Separated, DecimalSeparator, 3))" Depth="1"/>
+                          <Block Condition="convVoltageDrop &gt; convBatteryFullVoltageDrop">
+                            <rep:Reporter.Information Text="'Battery is full!!'"/>
+                            <Exit/>
+                          </Block>
+                          <Block Condition="PauseRequest">
+                            <sts:Status Text="'Charging paused..'" Depth="1"/>
+
+                            <Execute Statement="Psu.Enabled[PsuChargingChannel]:= False"/>
+                            <Pause ExitCondition="AbortRequest"/>
+                            <Execute Statement="Psu.Enabled[PsuChargingChannel]:= True"/>
+                            <!--<sts:Status Text="'Charging continued - settling...'"/>-->
+                            <sts:Status Text="'Charging continues..'" Depth="1"/>
+                          </Block>
+                          <Suspend>
+                            <Resume.Timed Duration="ns100SettlingTime"/>
+                            <Resume.BreakRequest IssueExit="True"/>
+                          </Suspend>
+                        </RepeatUntilLoop>
+                      </sts:Status.Block>
+                    </Try>
+                    <Finally>
+                      <Execute Statement="Psu.Enabled[PsuChargingChannel]:= False"/>
+                      <sim:Wait Time="300"/>
+                      <!-- Just to be safe, the PSU has some time related quirks -->
+                      <Execute Statement="Psu.Enabled[PsuChargingChannel]:= False"/>
+                    </Finally>
+                  </TryFinally>
+                </Object.Use>
+              </Object.Use>
+            </Object.Use>
+          </Block>
+        </Procedure>
+
+      </Procedures>
+
+      <Block>
+        <rep:Reporter.Information Text="'NiMH Battery charging using a SPD3303X'" Markup="Header1"/>
+        <rep:Reporter.Information Text="Format('Time: %s', FormatDateTime('', Now))"/>
+        <rep:Reporter.Information Text="Format('Interpreter version: %s', GetVersionInfo('%d.%d.%d'))"/>
+        <rep:Reporter.Information Text="Format('Script version: %s', ScriptVersion)"/>
+        <rep:Reporter.Information Text="Format('Filename: %s', ScriptFilename)"/>
+        <rep:Reporter.Information Text="Format('Reporting base directory: %s', ReportingBase)" Condition="not IsEmpty(ReportingBase)"/>
+        <rep:Reporter.Information Text="''"/>
+        <TryFinally>
+          <Try>
+            <Block Condition="InputStrings.Count &gt; 0">
+              <rep:Reporter.Information Text="'Comments'" Markup="Header2"/>
+              <ForLoop Indexer="I" From="0" To="InputStrings.Count - 1">
+                <rep:Reporter.Information Text="InputStrings[I]"/>
+              </ForLoop>
+              <rep:Reporter.Information Text="''"/>
+            </Block>
+            <rep:Reporter.Information Text="'Config report'" Markup="Header2"/>
+            <Execute Statement="ReadConfig"/>
+            <rep:Reporter.Information Text="''"/>
+            <rep:Reporter.Information Text="'Charging loop'" Markup="Header2"/>
+            <Execute Statement="ExecuteChargingLoop"/>
+          </Try>
+          <Finally>
+            <rep:Reporter.Information Text="''"/>
+            <rep:Reporter.Information Text="'Done'" Markup="Header2"/>
+            <rep:Reporter.Information Text="Format('Time: %s', FormatDateTime('', Now))"/>
+          </Finally>
+        </TryFinally>
+      </Block>
+    </Procedure>
+  </Procedures>
+
+  <Block>
+    <TryExcept>
+      <Try>
+        <sts:Status.Block Text="'Executing script'" LeaveText="'Done executing script'">
+          <Execute Statement="DoReportVisa:= IsDebugging"/>
+          <Execute Statement="Execute"/>
+        </sts:Status.Block>
+        <sts:Status Text="'Aborted script - reports are not saved automatically'" Condition="AbortRequest"/>
+      </Try>
+      <Except>
+        <On Identifier="E" ClassType="Exception">
+          <rep:Reporter.Error Text="Format('An exception of type %s was raised: %s', E.ClassName, E.Message)"/>
+          <sts:Status Text="'Failed executing script: ' + E.Message"/>
+          <Raise/>
+        </On>
+        <Otherwise>
+          <Raise/>
+        </Otherwise>
+      </Except>
+    </TryExcept>
+  </Block>
+</pkg:Program>

@@ -1,0 +1,12 @@
+[submodule "Script.Common.VISA"]
+	path = Script.Common.VISA
+	url = ../XMLScripts-Common-VISA.git
+[submodule "Script.Common.Electronics"]
+	path = Script.Common.Electronics
+	url = ../XMLScripts-Common-Electronics.git
+[submodule "Executable"]
+	path = Executable
+	url = ../XMLScriptInterpreter.git
+[submodule "XmlSchemas.Common.XmlScript"]
+	path = XmlSchemas.Common.XmlScript
+	url = ../XMLSchemas-Common-XmlScript.git
