@@ -39,8 +39,7 @@ MemSize=1M4
 ;Normal|PeakDetect|Average|HighRes
 AcquireWay=Normal
 TDiv=20 ms
-;TriggerSelect=PA
-;TriggerPattern=C1,X,C2,X,C3,X,C4,X,STATE,AND
+TriggerSelect=EDGE,SR,LINE,HT,OFF
 TriggerPattern=
 
 [Scope.MeasureTrace]
@@ -427,7 +426,6 @@ BatteryFullVoltageDrop=3 mV
             <rep:Reporter.Information Text="'Config report'" Markup="Header2"/>
             <Execute Statement="ReadConfig"/>
             <rep:Reporter.Information Text="''"/>
-            <rep:Reporter.Information Text="'Measuring'" Markup="Header2"/>
             <Execute Statement="RunMeasurements"/>
           </Try>
           <Finally>

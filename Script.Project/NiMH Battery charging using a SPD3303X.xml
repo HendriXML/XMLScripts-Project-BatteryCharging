@@ -54,7 +54,7 @@ BatteryFullVoltageDrop=3 mV
   </Uses>
 
   <Constants>
-    <Constant Identifier="ScriptVersion" Type="string" Expression="'5.2.18'"/>
+    <Constant Identifier="ScriptVersion" Type="string" Expression="'5.2.20'"/>
     <!-- t (s) = msSettlingTime x 100 ns-->
     <Constant Identifier="ns100SettlingTime" Type="Integer" Expression="1 * 10000000"/>
   </Constants>
@@ -178,7 +178,6 @@ BatteryFullVoltageDrop=3 mV
             <rep:Reporter.Information Text="'Config report'" Markup="Header2"/>
             <Execute Statement="ReadConfig"/>
             <rep:Reporter.Information Text="''"/>
-            <rep:Reporter.Information Text="'Charging loop'" Markup="Header2"/>
             <Execute Statement="ExecuteChargingLoop"/>
           </Try>
           <Finally>
