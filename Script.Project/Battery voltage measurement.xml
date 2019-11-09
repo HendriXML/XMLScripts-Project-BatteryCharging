@@ -45,6 +45,7 @@ TriggerPattern=
 [Scope.MeasureTrace]
 ;CH1|CH2|CH3|CH4
 Channel=CH1
+BandwidthLimit=1
 Attenuation=1
 InitialVOffset=-1.3 V
 
@@ -64,9 +65,9 @@ VDiv=5 mV
 VDiv=500 uV
 
 [Psu.ChargingChannel]
+Channel=CH1
 Current=1 A
 Voltage=2 V
-Channel=CH1
 
 [Charging]
 BatteryFullVoltageDrop=3 mV
@@ -96,7 +97,7 @@ BatteryFullVoltageDrop=3 mV
   </Type>
 
   <Constants>
-    <Constant Identifier="ScriptVersion" Type="string" Expression="'5.2.18'"/>
+    <Constant Identifier="ScriptVersion" Type="string" Expression="'5.2.21'"/>
     <Constant Identifier="OverflowLow" Type="Integer" Expression="-100"/>
     <Constant Identifier="OverflowHigh" Type="Integer" Expression="100"/>
     <Constant Identifier="msSettlingTime" Type="Integer" Expression="50"/>
@@ -118,6 +119,7 @@ BatteryFullVoltageDrop=3 mV
         <Variable Identifier="ScopeMemSize" Type="TMemSize" Init="TMemSize.ms1M4"/>
         <Variable Identifier="ScopeMeasureChannel" Type="TChannelType" Init="TChannelType.CH1"/>
         <Variable Identifier="ScopeMeasureTrace" Type="TTraceType"/>
+        <Variable Identifier="ScopeBandwidthLimit" Type="Boolean" Init="True"/>
         <Variable Identifier="PsuChargingChannel" Type="TSPD3303XChannel" Init="TSPD3303XChannel.CH1"/>
         <Variable Identifier="convChargingChannelCurrent" Type="ConvInt"/>
         <Variable Identifier="convChargingChannelVoltage" Type="ConvInt"/>
@@ -147,9 +149,10 @@ BatteryFullVoltageDrop=3 mV
                 <Execute Statement="ScopeAcquireWay:= Ini.ReadAcquireWay('AcquireWay', ScopeAcquireWay)"/>
                 <Execute Statement="ScopeTriggerSelect:= Ini.ReadString('TriggerSelect', ScopeTriggerSelect)"/>
                 <Execute Statement="ScopeTriggerPattern:= Ini.ReadString('TriggerPattern', ScopeTriggerPattern)"/>
-
+                
                 <Execute Statement="Ini.Section('Scope.MeasureTrace')"/>
                 <Execute Statement="ScopeMeasureChannel:= Ini.ReadChannelType('Channel', ScopeMeasureChannel) "/>
+                <Execute Statement="ScopeBandwidthLimit:= Ini.ReadBoolean('BandwidthLimit', ScopeBandwidthLimit)"/>
                 <Execute Statement="convMeasureChannelAttenuation:= Ini.ConvReadAttenuation('Attenuation', '1') "/>
                 <Execute Statement="convMeasureChannelInitialVOffset:= Ini.ConvReadVOffset('InitialVOffset', '1.3 V') "/>
 
@@ -322,7 +325,12 @@ BatteryFullVoltageDrop=3 mV
                             <Execute Statement="Scope.AcquireWay:= ScopeAcquireWay"/>
                             <Execute Statement="Scope.MemorySize:= ScopeMemSize"/>
                             <Execute Statement="Scope.ConvTDiv:= convScopeTDiv"/>
+                            <Execute Statement="Scope.Enabled[TChannelType.CH1]:= ScopeMeasureChannel = TChannelType.CH1"/>
+                            <Execute Statement="Scope.Enabled[TChannelType.CH2]:= ScopeMeasureChannel = TChannelType.CH2"/>
+                            <Execute Statement="Scope.Enabled[TChannelType.CH3]:= ScopeMeasureChannel = TChannelType.CH3"/>
+                            <Execute Statement="Scope.Enabled[TChannelType.CH4]:= ScopeMeasureChannel = TChannelType.CH4"/>
                             <Execute Statement="Scope.ConvAttenuation[ScopeMeasureChannel]:= convMeasureChannelAttenuation"/>
+                            <Execute Statement="Scope.BandwidthLimit[ScopeMeasureChannel]:= ScopeBandwidthLimit"/>
                             <Execute Statement="Scope.ConvVOffset[ScopeMeasureChannel]:= convMeasureChannelInitialVOffset"/>
                             <Execute Statement="Scope.TriggerSelect:= ScopeTriggerSelect" Condition="IsNonEmptyString(ScopeTriggerSelect)"/>
                             <Execute Statement="Scope.TriggerPattern:= ScopeTriggerPattern" Condition="IsNonEmptyString(ScopeTriggerPattern)"/>
