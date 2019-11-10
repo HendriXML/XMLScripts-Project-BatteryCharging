@@ -97,7 +97,7 @@ BatteryFullVoltageDrop=3 mV
   </Type>
 
   <Constants>
-    <Constant Identifier="ScriptVersion" Type="string" Expression="'5.2.21'"/>
+    <Constant Identifier="ScriptVersion" Type="string" Expression="'5.2.23'"/>
     <Constant Identifier="OverflowLow" Type="Integer" Expression="-100"/>
     <Constant Identifier="OverflowHigh" Type="Integer" Expression="100"/>
     <Constant Identifier="msSettlingTime" Type="Integer" Expression="50"/>
