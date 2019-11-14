@@ -45,16 +45,16 @@ BatteryFullVoltageDrop=3 mV
   <Imports>
     <Import Identifier="ElectronicUtils" Filename="..\Script.Common.Electronics\ElectronicUtils.xml"/>
     <Import Identifier="VISAInstrument" Filename="..\Script.Common.VISA\VISA Instrument.xml"/>
-    <Import Identifier="SiglentSPD3303X" Filename="..\Script.Common.VISA\VISA Siglent SPD3303X.xml"/>
+    <Import Identifier="SiglentPowerSupplies" Filename="..\Script.Common.VISA\VISA Siglent Power supplies.xml"/>
   </Imports>
   <Uses>
     <Use Identifier="ElectronicUtils"/>
     <Use Identifier="VISAInstrument"/>
-    <Use Identifier="SiglentSPD3303X"/>
+    <Use Identifier="SiglentPowerSupplies"/>
   </Uses>
 
   <Constants>
-    <Constant Identifier="ScriptVersion" Type="string" Expression="'5.2.24'"/>
+    <Constant Identifier="ScriptVersion" Type="string" Expression="'5.2.26'"/>
     <!-- t (s) = msSettlingTime x 100 ns-->
     <Constant Identifier="ns100SettlingTime" Type="Integer" Expression="1 * 10000000"/>
   </Constants>
@@ -64,7 +64,7 @@ BatteryFullVoltageDrop=3 mV
     <Procedure Identifier="Execute">
       <Variables>
         <Variable Identifier="PsuRN" Type="string" Init="'TCPIP0::powersupply::inst0::INSTR'"/>
-        <Variable Identifier="PsuChargingChannel" Type="TSPD3303XChannel" Init="TSPD3303XChannel.CH1"/>
+        <Variable Identifier="PsuChargingChannel" Type="TSPDChannel" Init="TSPDChannel.CH1"/>
         <Variable Identifier="convChargingChannelCurrent" Type="ConvInt"/>
         <Variable Identifier="convChargingChannelVoltage" Type="ConvInt"/>
         <Variable Identifier="convBatteryFullVoltageDrop" Type="ConvInt"/>
@@ -80,11 +80,11 @@ BatteryFullVoltageDrop=3 mV
               <Execute Statement="Ini.Section('VISA')"/>
               <Execute Statement="PsuRN:= Ini.ReadString('PsuRN', PsuRN) "/>
 
-              <Object.Use Identifier="Ini" Type="TSiglentSPD3303XIniHelper" Expression="TSiglentSPD3303XIniHelper.Create(Ini.Inifile, Ini.EnableEcho)">
+              <Object.Use Identifier="Ini" Type="TSiglentPowerSupplyIniHelper" Expression="TSiglentPowerSupplyIniHelper.Create(Ini.Inifile, Ini.EnableEcho)">
                 <Execute Statement="Ini.Section('Psu.ChargingChannel')"/>
                 <Execute Statement="convChargingChannelCurrent:= Ini.ConvReadCurrent('Current', '1 A')"/>
                 <Execute Statement="convChargingChannelVoltage:= Ini.ConvReadVoltage('Voltage', '2 V')"/>
-                <Execute Statement="PsuChargingChannel:= Ini.ReadSPD3303XChannel('Channel', PsuChargingChannel) "/>
+                <Execute Statement="PsuChargingChannel:= Ini.ReadSPDChannel('Channel', PsuChargingChannel) "/>
               </Object.Use>
               <Execute Statement="Ini.Section('Charging')"/>
               <Execute Statement="convBatteryFullVoltageDrop:= Ini.ReadConvInt('BatteryFullVoltageDrop', ucActualVoltage, '5 mV')"/>
@@ -99,7 +99,7 @@ BatteryFullVoltageDrop=3 mV
             <Object.Use Identifier="VisaRM" Type="TVisaResourceManager" Expression="TVisaResourceManager.Create">
               <sts:Status Text="'Connecting to powersupply'"/>
               <Object.Use Identifier="PsuSession" Type="TVisaResource" Expression="VisaRM.OpenResource(PsuRN, TAccessMode.NO_LOCK, 10000)">
-                <Object.Use Identifier="Psu" Type="TSiglentSPD3303X" Expression="TSiglentSPD3303X.Create(PsuSession)">
+                <Object.Use Identifier="Psu" Type="TSiglentPowerSupply" Expression="TSiglentPowerSupply.MatchingClass(PsuSession).Create(PsuSession)">
                   <Execute Statement="Psu.Enabled[PsuChargingChannel]:= False"/>
                   <TryFinally>
                     <Try>

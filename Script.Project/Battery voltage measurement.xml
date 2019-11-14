@@ -76,14 +76,14 @@ BatteryFullVoltageDrop=3 mV
   <Imports>
     <Import Identifier="ElectronicUtils" Filename="..\Script.Common.Electronics\ElectronicUtils.xml"/>
     <Import Identifier="VISAInstrument" Filename="..\Script.Common.VISA\VISA Instrument.xml"/>
-    <Import Identifier="SiglentSDS1104X" Filename="..\Script.Common.VISA\VISA Siglent SDS1104X.xml"/>
-    <Import Identifier="SiglentSPD3303X" Filename="..\Script.Common.VISA\VISA Siglent SPD3303X.xml"/>
+    <Import Identifier="SiglentScopes" Filename="..\Script.Common.VISA\VISA Siglent Scopes.xml"/>
+    <Import Identifier="SiglentPowerSupplies" Filename="..\Script.Common.VISA\VISA Siglent Power supplies.xml"/>
   </Imports>
   <Uses>
     <Use Identifier="ElectronicUtils"/>
     <Use Identifier="VISAInstrument"/>
-    <Use Identifier="SiglentSDS1104X"/>
-    <Use Identifier="SiglentSPD3303X"/>
+    <Use Identifier="SiglentScopes"/>
+    <Use Identifier="SiglentPowerSupplies"/>
   </Uses>
 
   <Type>
@@ -97,7 +97,7 @@ BatteryFullVoltageDrop=3 mV
   </Type>
 
   <Constants>
-    <Constant Identifier="ScriptVersion" Type="string" Expression="'5.2.24'"/>
+    <Constant Identifier="ScriptVersion" Type="string" Expression="'5.2.26'"/>
     <Constant Identifier="OverflowLow" Type="Integer" Expression="-100"/>
     <Constant Identifier="OverflowHigh" Type="Integer" Expression="100"/>
     <Constant Identifier="msSettlingTime" Type="Integer" Expression="50"/>
@@ -109,7 +109,7 @@ BatteryFullVoltageDrop=3 mV
       <Variables>
         <Variable Identifier="ScopeRN" Type="string" Init="'TCPIP0::scope::inst0::INSTR'"/>
         <Variable Identifier="PsuRN" Type="string" Init="'TCPIP0::powersupply::inst0::INSTR'"/>
-        <Variable Identifier="Scope" Type="TSiglentSDS1104X"/>
+        <Variable Identifier="Scope" Type="TSiglentScope"/>
         <Variable Identifier="ScopeTriggerSelect" Type="viString" Init="'EDGE,SR,LINE,HT,OFF'"/>
         <Variable Identifier="ScopeTriggerPattern" Type="viString" Init="''"/>
         <Variable Identifier="convScopeTDiv" Type="ConvInt"/>
@@ -120,7 +120,7 @@ BatteryFullVoltageDrop=3 mV
         <Variable Identifier="ScopeMeasureChannel" Type="TChannelType" Init="TChannelType.CH1"/>
         <Variable Identifier="ScopeMeasureTrace" Type="TTraceType"/>
         <Variable Identifier="ScopeBandwidthLimit" Type="Boolean" Init="True"/>
-        <Variable Identifier="PsuChargingChannel" Type="TSPD3303XChannel" Init="TSPD3303XChannel.CH1"/>
+        <Variable Identifier="PsuChargingChannel" Type="TSPDChannel" Init="TSPDChannel.CH1"/>
         <Variable Identifier="convChargingChannelCurrent" Type="ConvInt"/>
         <Variable Identifier="convChargingChannelVoltage" Type="ConvInt"/>
         <Variable Identifier="SensitivityHead" Type="TSensitivity" Init="ObjNil"/>
@@ -142,7 +142,7 @@ BatteryFullVoltageDrop=3 mV
               <Execute Statement="ScopeRN:= Ini.ReadString('ScopeRN', ScopeRN) "/>
               <Execute Statement="PsuRN:= Ini.ReadString('PsuRN', PsuRN) "/>
 
-              <Object.Use Identifier="Ini" Type="TSiglentSDS1104XIniHelper" Expression="TSiglentSDS1104XIniHelper.Create(Ini.Inifile, Ini.EnableEcho)">
+              <Object.Use Identifier="Ini" Type="TSiglentScopeIniHelper" Expression="TSiglentScopeIniHelper.Create(Ini.Inifile, Ini.EnableEcho)">
                 <Execute Statement="Ini.Section('Scope')"/>
                 <Execute Statement="convScopeTDiv:= Ini.ConvReadTDiv('TDiv', '10 ms') "/>
                 <Execute Statement="ScopeMemSize:= Ini.ReadMemSize('MemSize', ScopeMemSize)"/>
@@ -174,9 +174,9 @@ BatteryFullVoltageDrop=3 mV
                 </lil:LinkedList.Iterate>
               </Object.Use>
 
-              <Object.Use Identifier="Ini" Type="TSiglentSPD3303XIniHelper" Expression="TSiglentSPD3303XIniHelper.Create(Ini.Inifile, Ini.EnableEcho)">
+              <Object.Use Identifier="Ini" Type="TSiglentPowerSupplyIniHelper" Expression="TSiglentPowerSupplyIniHelper.Create(Ini.Inifile, Ini.EnableEcho)">
                 <Execute Statement="Ini.Section('Psu.ChargingChannel')"/>
-                <Execute Statement="PsuChargingChannel:= Ini.ReadSPD3303XChannel('Channel', PsuChargingChannel) "/>
+                <Execute Statement="PsuChargingChannel:= Ini.ReadSPDChannel('Channel', PsuChargingChannel) "/>
                 <Execute Statement="convChargingChannelCurrent:= Ini.ConvReadCurrent('Current', '1 A')"/>
                 <Execute Statement="convChargingChannelVoltage:= Ini.ConvReadVoltage('Voltage', '2 V')"/>
               </Object.Use>
@@ -216,14 +216,14 @@ BatteryFullVoltageDrop=3 mV
                 </sts:Status.Block>
                 <Execute Statement="PreAquisitionSignalAcquiredSC:= LastSignalAcquiredSC"/>
                 <Execute Statement="PreAquisitionTriggerIsReadySC:= LastTriggerIsReadySC"/>
-                <Variable Identifier="TraceIDStr" Type="string" Init="Scope.TraceID[Trace]"/>
                 <Variable Identifier="Count" Type="Integer"/>
                 <Variable Identifier="CountDiv4" Type="Integer"/>
                 <Variable Identifier="MidCount" Type="Integer"/>
                 <Variable Identifier="Min" Type="Integer"/>
                 <Variable Identifier="Max" Type="Integer"/>
                 <Variable Identifier="Sum" Type="Int64"/>
-                <sts:Status.Block Text="Format('Capturing %s', TraceIDStr)" LeaveText="Format('Done capturing %s', TraceIDStr)">
+                <Variable Identifier="TraceName" Type="string" Init="Scope.TraceTypeName(Trace)"/>
+                <sts:Status.Block Text="Format('Capturing %s', TraceName)" LeaveText="Format('Done capturing %s', TraceName)">
                   <Object.Use Identifier="AcquisitionInfo" Type="TSingleSummedSampleAcquisitionInfo" Expression="Scope.GetSingleSummedSample(Trace, ObjNil)">
                     <Execute Statement="Scope.TriggerMode:= TTriggerMode.Single"/>
                     <Execute Statement="SetWaitableTimer(TriggerTimer, TriggerTimerDueTime, 0, True)"/>
@@ -301,10 +301,10 @@ BatteryFullVoltageDrop=3 mV
             <Object.Use Identifier="VisaRM" Type="TVisaResourceManager" Expression="TVisaResourceManager.Create">
               <sts:Status Text="'Connecting to scope'"/>
               <Object.Use Identifier="ScopeSession" Type="TVisaResource" Expression="VisaRM.OpenResource(ScopeRN, TAccessMode.Exclusive_Lock, 10000)">
-                <Object.Use Identifier="Scope" Type="TSiglentSDS1104X" Expression="TSiglentSDS1104X.Create(ScopeSession)" LocalVariable="false">
+                <Object.Use Identifier="Scope" Type="TSiglentScope" Expression="TSiglentScope.MatchingClass(ScopeSession).Create(ScopeSession)" LocalVariable="false">
                   <sts:Status Text="'Connecting to powersupply'"/>
                   <Object.Use Identifier="PsuSession" Type="TVisaResource" Expression="VisaRM.OpenResource(PsuRN, TAccessMode.NO_LOCK, 10000)">
-                    <Object.Use Identifier="Psu" Type="TSiglentSPD3303X" Expression="TSiglentSPD3303X.Create(PsuSession)">
+                    <Object.Use Identifier="Psu" Type="TSiglentPowerSupply" Expression="TSiglentPowerSupply.MatchingClass(PsuSession).Create(PsuSession)">
                       <Execute Statement="Psu.Enabled[PsuChargingChannel]:= False"/>
                       <TryFinally>
                         <Try>
