@@ -100,7 +100,7 @@ BatteryFullVoltageDrop=3 mV
   </Type>
 
   <Constants>
-    <Constant Identifier="ScriptVersion" Type="string" Expression="'5.4.39'"/>
+    <Constant Identifier="ScriptVersion" Type="string" Expression="'5.4.41'"/>
     <Constant Identifier="OverflowLow" Type="Integer" Expression="-100"/>
     <Constant Identifier="OverflowHigh" Type="Integer" Expression="100"/>
     <Constant Identifier="msSettlingTime" Type="Integer" Expression="50"/>
@@ -130,7 +130,7 @@ BatteryFullVoltageDrop=3 mV
         <Variable Identifier="TriggerTimerDueTime" Type="Int64"/>
         <Variable Identifier="SignalAcquiredState" Type="TRegisterState"/>
         <Variable Identifier="convBatteryFullVoltageDrop" Type="ConvInt"/>
-        <Variable Identifier="PowerLineCycles" Type="UInt32" Init="12"/>
+        <Variable Identifier="convPowerLineCycles" Type="ConvInt"/>
         <Variable Identifier="convPowerLineFrequency" Type="ConvInt"/>
       </Variables>
 
@@ -145,6 +145,10 @@ BatteryFullVoltageDrop=3 mV
               <Execute Statement="ScopeRN:= Ini.ReadString('ScopeRN', ScopeRN) "/>
               <Execute Statement="PsuRN:= Ini.ReadString('PsuRN', PsuRN) "/>
 
+              <Execute Statement="Ini.Section('Timing')"/>
+              <Execute Statement="convPowerLineFrequency:= Ini.ConvReadCycleFrequency('PowerLineFrequency', '50 hz') "/>
+              <Execute Statement="convPowerLineCycles:= Ini.ConvReadPowerLineCycles('PowerLineCycles', '5')"/>
+
               <Object.Use Identifier="Ini" Type="TSiglentScopeIniHelper" Expression="TSiglentScopeIniHelper.Create(Ini.Inifile, Ini.EnableEcho)">
                 <Execute Statement="Ini.Section('Scope')"/>
                 <Execute Statement="ScopeMemSize:= Ini.ReadMemSize('MemSize', ScopeMemSize)"/>
@@ -152,10 +156,7 @@ BatteryFullVoltageDrop=3 mV
                 <Execute Statement="ScopeTriggerSelect:= Ini.ReadString('TriggerSelect', ScopeTriggerSelect)"/>
                 <Execute Statement="ScopeTriggerPattern:= Ini.ReadString('TriggerPattern', ScopeTriggerPattern)"/>
 
-                <Execute Statement="Ini.Section('Scope.Timing')"/>
-                <Execute Statement="convPowerLineFrequency:= Ini.ConvReadCycleFrequency('PowerLineFrequency', '50 hz') "/>
-                <Execute Statement="PowerLineCycles:= Ini.ReadInteger('PowerLineCycles', PowerLineCycles)"/>
-
+                
                 <Execute Statement="Ini.Section('Scope.MeasureTrace')"/>
                 <Execute Statement="ScopeMeasureChannel:= Ini.ReadChannelType('Channel', ScopeMeasureChannel) "/>
                 <Execute Statement="ScopeBandwidthLimit:= Ini.ReadBoolean('BandwidthLimit', ScopeBandwidthLimit)"/>
@@ -323,7 +324,7 @@ BatteryFullVoltageDrop=3 mV
                             <Execute Statement="Scope.TriggerMode:= TTriggerMode.Single"/>
                             <Execute Statement="Scope.AcquireWay:= ScopeAcquireWay"/>
                             <Execute Statement="Scope.MemorySize:= ScopeMemSize"/>
-                            <Execute Statement="Scope.ConvTDiv:= Scope.ConvGetCyclesTDiv(convPowerLineFrequency, PowerLineCycles)"/>
+                            <Execute Statement="Scope.ConvTDiv:= Scope.ConvGetCyclesTDiv(convPowerLineFrequency, convPowerLineCycles)"/>
                             <Execute Statement="Scope.Enabled[TChannelType.CH1]:= ScopeMeasureChannel = TChannelType.CH1"/>
                             <Execute Statement="Scope.Enabled[TChannelType.CH2]:= ScopeMeasureChannel = TChannelType.CH2"/>
                             <Execute Statement="Scope.Enabled[TChannelType.CH3]:= ScopeMeasureChannel = TChannelType.CH3"/>
@@ -356,7 +357,7 @@ BatteryFullVoltageDrop=3 mV
                               <stm:SetState Name="TargetSensitivity" Condition="ChangeMeasurementSensitivity(CurrentSensitivity, TSensitivityChangeType.Initial)"/>
                               <sim:Wait Time="msSettlingTime"/>
                               <Object.Use Identifier="SampleOptions" Type="TSingleSummedSampleAcquisitionOptions" Expression="TSingleSummedSampleAcquisitionOptions.Create">
-                                <Execute Statement="SampleOptions.LimitSamples:= Scope.GetCycleSamples(convPowerLineFrequency, PowerLineCycles)"/>
+                                <Execute Statement="SampleOptions.LimitSamples:= Scope.GetCycleSamples(convPowerLineFrequency, convPowerLineCycles)"/>
                                 <RepeatUntilLoop Expression="AbortRequest">
                                   <Execute Statement="voltMeasuredVoltage:= TakeScopeMeasurement(ScopeMeasureTrace, SampleOptions, Overflow)"/>
                                   <ExitOnAbortRequest/>
