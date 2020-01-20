@@ -1,0 +1,600 @@
+﻿<?xml version="1.0" encoding="utf-8" standalone="no"?>
+<pkg:Program
+  xsi:schemaLocation="urn:schemas-www-wisware.nl-scriptingpackages ../XmlSchemas.Common.XmlScript/XMLScripting.Packages.xsd"
+  xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+  xmlns="urn:schemas-www-wisware.nl-xmlscripting"
+  xmlns:pkg="urn:schemas-www-wisware.nl-scriptingpackages"
+  xmlns:sys="urn:schemas-www-wisware.nl-xmlscripting"
+  xmlns:ado="urn:schemas-www-wisware.nl-xmlscripting-ado"
+  xmlns:fil="urn:schemas-www-wisware.nl-xmlscripting-filemanagement"
+  xmlns:fwl="urn:schemas-www-wisware.nl-xmlscripting-windowsfirewall"
+  xmlns:inx="urn:schemas-www-wisware.nl-xmlscripting-index"
+  xmlns:lil="urn:schemas-www-wisware.nl-xmlscripting-linkedlist"
+  xmlns:msx="urn:schemas-www-wisware.nl-xmlscripting-xml"
+  xmlns:reg="urn:schemas-www-wisware.nl-xmlscripting-registry"
+  xmlns:rep="urn:schemas-www-wisware.nl-xmlscripting-report"
+  xmlns:sts="urn:schemas-www-wisware.nl-xmlscripting-showstatus"
+  xmlns:syu="urn:schemas-www-wisware.nl-xmlscripting-sysutils"
+  xmlns:sim="urn:schemas-www-wisware.nl-xmlscripting-simulateuserinput"
+  xmlns:stm="urn:schemas-www-wisware.nl-xmlscripting-statemanagement"
+ >
+  <pkg:ReportTargets>
+    <pkg:Target Identifier="Default" Description="Report"/>
+    <pkg:Target Identifier="Measurements" Description="Measurements"/>
+    <pkg:Target Identifier="Visa" Description="Visa report"/>
+  </pkg:ReportTargets>
+  <pkg:Config>
+    <![CDATA[
+[Check]
+; Set to 1 if these are all correct.
+ValidParameters=0
+
+[VISA]
+;scope = dns, can be replace with ip-adress
+ScopeRN=TCPIP0::scope::inst0::INSTR
+PsuRN=TCPIP0::powersupply::inst0::INSTR
+DmmRN=TCPIP0::dmm::inst0::INSTR
+
+[Scope]
+MemSize=14K
+;Normal|PeakDetect|Average|HighRes
+AcquireWay=Normal
+
+[Scope.Timing]
+PowerLineFrequency=50 hz
+PowerLineCycles=5
+
+[Scope.MeasureTrace]
+;CH1|CH2|CH3|CH4
+Channel=CH2
+BandwidthLimit=1
+Attenuation=1
+InitialVOffset=-1.3 V
+
+[Scope.Triggering]
+TriggerSelect=EDGE,SR,C4,HT,OFF
+TriggerSlope=NEG
+TriggerPattern=
+TriggerLevel=2.5V
+
+[Scope.TriggerTrace]
+;CH1|CH2|CH3|CH4
+Channel=CH4
+BandwidthLimit=0
+Attenuation=1
+VOffset=-2.5 V
+VDiv=1 V
+
+[Sensitivity]
+Count=4
+
+[Sensitivity.1]
+VDiv=500 mV
+
+[Sensitivity.2]
+VDiv=50 mV
+
+[Sensitivity.3]
+VDiv=5 mV
+
+[Sensitivity.4]
+VDiv=500 uV
+
+[Psu.ChargingChannel]
+Channel=CH1
+Current=1 A
+Voltage=2 V
+
+[Charging]
+BatteryFullVoltageDrop=8 mV
+
+[Calibration.Output]
+Filename=F:\Software development\Electronica\Projects\BatteryCharger\Calibration.Project\CH2 Offset 500uV.xml
+]]>
+  </pkg:Config>
+  <Imports>
+    <Import Identifier="ElectronicUtils" Filename="..\Script.Common.Electronics\ElectronicUtils.xml"/>
+    <Import Identifier="Calibration" Filename="..\Script.Common.VISA\Calibration.xml"/>
+    <Import Identifier="VISAInstrument" Filename="..\Script.Common.VISA\VISA Instrument.xml"/>
+    <Import Identifier="SiglentScopes" Filename="..\Script.Common.VISA\VISA Siglent Scopes.xml"/>
+    <Import Identifier="SiglentPowerSupplies" Filename="..\Script.Common.VISA\VISA Siglent Power supplies.xml"/>
+    <Import Identifier="KeithleyDMM6500" Filename="..\Script.Common.VISA\VISA Keithley DMM6500.xml"/>
+  </Imports>
+  <Uses>
+    <Use Identifier="ElectronicUtils"/>
+    <Use Identifier="Calibration"/>
+    <Use Identifier="VISAInstrument"/>
+    <Use Identifier="SiglentScopes"/>
+    <Use Identifier="SiglentPowerSupplies"/>
+    <Use Identifier="KeithleyDMM6500"/>
+  </Uses>
+
+  <Type>
+    <Enumeration Identifier="TSensitivityChangeType" Elements="Initial, More, Less"/>
+
+    <DataClass Identifier="TSensitivity">
+      <Field Identifier="convVDiv" Type="ConvInt"/>
+      <Field Identifier="Less" Type="TSensitivity"/>
+      <Field Identifier="More" Type="TSensitivity"/>
+    </DataClass>
+  </Type>
+
+  <Constants>
+    <Constant Identifier="ScriptVersion" Type="string" Expression="'5.4.39'"/>
+    <Constant Identifier="OverflowLow" Type="Integer" Expression="-100"/>
+    <Constant Identifier="OverflowHigh" Type="Integer" Expression="100"/>
+    <Constant Identifier="msSettlingTime" Type="Integer" Expression="50"/>
+  </Constants>
+
+  <Procedures>
+
+    <Procedure Identifier="Execute">
+      <Variables>
+        <Variable Identifier="ScopeRN" Type="string" Init="'TCPIP0::scope::inst0::INSTR'"/>
+        <Variable Identifier="PsuRN" Type="string" Init="'TCPIP0::powersupply::inst0::INSTR'"/>
+        <Variable Identifier="DmmRN" Type="string" Init="'TCPIP0::dmm::inst0::INSTR'"/>
+        <Variable Identifier="Scope" Type="TSiglentScope"/>
+        <Variable Identifier="ScopeTriggerSelect" Type="viString" Init="'EDGE,SR,C4,HT,OFF'"/>
+        <Variable Identifier="ScopeTriggerSlope" Type="viString" Init="'NEG'"/>
+        <Variable Identifier="ScopeTriggerPattern" Type="viString" Init="''"/>
+        <Variable Identifier="convScopeTriggerLevel" Type="ConvInt"/>
+
+
+        <Variable Identifier="ScopeAcquireWay" Type="TAcquireWay" Init="TAcquireWay.Normal"/>
+        <Variable Identifier="ScopeMemSize" Type="TMemSize" Init="TMemSize.ms1M4"/>
+
+        <Variable Identifier="ScopeMeasureChannel" Type="TChannelType" Init="TChannelType.CH1"/>
+        <Variable Identifier="ScopeMeasureTrace" Type="TTraceType"/>
+        <Variable Identifier="convMeasureChannelAttenuation" Type="ConvInt"/>
+        <Variable Identifier="convMeasureChannelInitialVOffset" Type="ConvInt"/>
+        <Variable Identifier="ScopeMeasureChannelBandwidthLimit" Type="Boolean" Init="True"/>
+
+        <Variable Identifier="ScopeTriggerChannel" Type="TChannelType" Init="TChannelType.CH4"/>
+        <Variable Identifier="ScopeTriggerTrace" Type="TTraceType"/>
+        <Variable Identifier="convTriggerChannelAttenuation" Type="ConvInt"/>
+        <Variable Identifier="convTriggerChannelVOffset" Type="ConvInt"/>
+        <Variable Identifier="convTriggerChannelVDiv" Type="ConvInt"/>
+        <Variable Identifier="ScopeTriggerChannelBandwidthLimit" Type="Boolean" Init="False"/>
+
+        <Variable Identifier="PsuChargingChannel" Type="TSPDChannel" Init="TSPDChannel.CH1"/>
+        <Variable Identifier="convChargingChannelCurrent" Type="ConvInt"/>
+        <Variable Identifier="convChargingChannelVoltage" Type="ConvInt"/>
+        <Variable Identifier="SensitivityHead" Type="TSensitivity" Init="ObjNil"/>
+        <Variable Identifier="TriggerTimer" Type="THandle"/>
+        <Variable Identifier="TriggerTimerDueTime" Type="Int64"/>
+        <Variable Identifier="SignalAcquiredState" Type="TRegisterState"/>
+        <Variable Identifier="TriggerIsReadyState" Type="TRegisterState"/>
+        <Variable Identifier="convBatteryFullVoltageDrop" Type="ConvInt"/>
+        <Variable Identifier="PowerLineCycles" Type="UInt32" Init="12"/>
+        <Variable Identifier="convPowerLineFrequency" Type="ConvInt"/>
+        <Variable Identifier="CalibrationFilename" Type="string" Init="'Calibration.xml'"/>
+        <Variable Identifier="ReverseOffsetInterpolater" Type="TLineairInterpolater"/>
+        <Variable Identifier="OffsetInterpolater" Type="TLineairInterpolater"/>
+      </Variables>
+
+      <Procedures>
+        <Procedure Identifier="ReadConfig">
+          <Block>
+            <Object.Use Identifier="Ini" Type="TIniHelper" Expression="TIniHelper.Create(ConfigInifile, True)">
+              <Execute Statement="Ini.Section('Check', False)"/>
+              <Variable Identifier="ValidParameters" Type="Boolean" Init="Ini.ReadBool('ValidParameters', False)"/>
+
+              <Execute Statement="Ini.Section('VISA')"/>
+              <Execute Statement="ScopeRN:= Ini.ReadString('ScopeRN', ScopeRN) "/>
+              <Execute Statement="PsuRN:= Ini.ReadString('PsuRN', PsuRN) "/>
+              <Execute Statement="DmmRN:= Ini.ReadString('DmmRN', DmmRN) "/>
+
+              <Object.Use Identifier="Ini" Type="TSiglentScopeIniHelper" Expression="TSiglentScopeIniHelper.Create(Ini.Inifile, Ini.EnableEcho)">
+                <Execute Statement="Ini.Section('Scope')"/>
+                <Execute Statement="ScopeMemSize:= Ini.ReadMemSize('MemSize', ScopeMemSize)"/>
+                <Execute Statement="ScopeAcquireWay:= Ini.ReadAcquireWay('AcquireWay', ScopeAcquireWay)"/>
+
+                <Execute Statement="Ini.Section('Scope.Timing')"/>
+                <Execute Statement="convPowerLineFrequency:= Ini.ConvReadCycleFrequency('PowerLineFrequency', '50 hz') "/>
+                <Execute Statement="PowerLineCycles:= Ini.ReadInteger('PowerLineCycles', PowerLineCycles)"/>
+
+                <Execute Statement="Ini.Section('Scope.MeasureTrace')"/>
+                <Execute Statement="ScopeMeasureChannel:= Ini.ReadChannelType('Channel', ScopeMeasureChannel) "/>
+                <Execute Statement="ScopeMeasureChannelBandwidthLimit:= Ini.ReadBoolean('BandwidthLimit', ScopeMeasureChannelBandwidthLimit)"/>
+                <Execute Statement="convMeasureChannelAttenuation:= Ini.ConvReadAttenuation('Attenuation', '1') "/>
+                <Execute Statement="convMeasureChannelInitialVOffset:= Ini.ConvReadVOffset('InitialVOffset', '-1.3 V')"/>
+
+                <Execute Statement="Ini.Section('Scope.Triggering')"/>
+                <Execute Statement="ScopeTriggerSelect:= Ini.ReadString('TriggerSelect', ScopeTriggerSelect)"/>
+                <Execute Statement="ScopeTriggerSlope:= Ini.ReadString('TriggerSlope', ScopeTriggerSlope)"/>
+                <Execute Statement="ScopeTriggerPattern:= Ini.ReadString('TriggerPattern', ScopeTriggerPattern)"/>
+                <Execute Statement="convScopeTriggerLevel:= Ini.ConvReadTriggerLevel('TriggerLevel', '2.5 V')"/>
+
+                <Execute Statement="Ini.Section('Scope.TriggerTrace')"/>
+                <Execute Statement="ScopeTriggerChannel:= Ini.ReadChannelType('Channel', ScopeTriggerChannel) "/>
+                <Execute Statement="ScopeTriggerChannelBandwidthLimit:= Ini.ReadBoolean('BandwidthLimit', ScopeTriggerChannelBandwidthLimit)"/>
+                <Execute Statement="convTriggerChannelAttenuation:= Ini.ConvReadAttenuation('Attenuation', '1') "/>
+                <Execute Statement="convTriggerChannelVOffset:= Ini.ConvReadVOffset('VOffset', '-2.5 V') "/>
+                <Execute Statement="convTriggerChannelVDiv:= Ini.ConvReadVDiv('VDiv', '1 V') "/>
+
+                <Execute Statement="Ini.Section('Sensitivity')"/>
+                <Variable Identifier="SensitivityCount" Type="UInt32" Init="Ini.ReadInteger('Count', 1)"/>
+                <Variable Identifier="SensitivityTail" Type="TSensitivity" Init="ObjNil"/>
+                <ForLoop Indexer="I" From="1" To="SensitivityCount">
+                  <Execute Statement="Ini.Section('Sensitivity.' + IntToStr(I))"/>
+                  <lil:LinkedList.LinkUp Item="TSensitivity.Create(Ini.ConvReadVDiv('VDiv', '2 V'))" Head="SensitivityHead" Tail="SensitivityTail" TailLinkStatement="SensitivityTail.More:= Item"/>
+                </ForLoop>
+                <!-- Make sure they're sorted: higher values in front -->
+                <lil:LinkedList.MergeSort Head="SensitivityHead" ItemType="TSensitivity" Next="Item.More" LinkUp="ItemA.More:= ItemB" IsInOrder="ItemA.convVDiv &gt;= ItemB.convVDiv"/>
+
+                <!-- Link them both ways -->
+                <Variable Identifier="PrevItem" Type="TSensitivity" Init="ObjNil"/>
+                <lil:LinkedList.Iterate Head="SensitivityHead" ItemType="TSensitivity" RunningItem="Item" Next="Item.More">
+                  <Execute Statement="Item.Less:= PrevItem"/>
+                  <Execute Statement="PrevItem:= Item"/>
+                </lil:LinkedList.Iterate>
+              </Object.Use>
+
+              <Object.Use Identifier="Ini" Type="TSiglentPowerSupplyIniHelper" Expression="TSiglentPowerSupplyIniHelper.Create(Ini.Inifile, Ini.EnableEcho)">
+                <Execute Statement="Ini.Section('Psu.ChargingChannel')"/>
+                <Execute Statement="PsuChargingChannel:= Ini.ReadSPDChannel('Channel', PsuChargingChannel) "/>
+                <Execute Statement="convChargingChannelCurrent:= Ini.ConvReadCurrent('Current', '1 A')"/>
+                <Execute Statement="convChargingChannelVoltage:= Ini.ConvReadVoltage('Voltage', '2 V')"/>
+              </Object.Use>
+              <Execute Statement="Ini.Section('Charging')"/>
+              <Execute Statement="convBatteryFullVoltageDrop:= Ini.ReadConvInt('BatteryFullVoltageDrop', ucVOffset, '5 mV')"/>
+
+              <Execute Statement="Ini.Section('Calibration.Output')"/>
+              <Execute Statement="CalibrationFilename:= Ini.ReadString('Filename', CalibrationFilename)"/>
+
+
+              <Raise Expression="Exception.Create('Please check the config and set validparameters=1')" Condition="not ValidParameters"/>
+            </Object.Use>
+          </Block>
+        </Procedure>
+
+        <Procedure Identifier="RunMeasurements">
+          <Procedures>
+            <Function Identifier="TakeScopeMeasurement" Type="ConvInt">
+              <Parameters>
+                <Parameter Identifier="Trace" Type="TTraceType"/>
+                <Parameter Identifier="SampleOptions" Type="TSingleSummedSampleAcquisitionOptions"/>
+                <Parameter Identifier="DoInterpolate" Type="Boolean"/>
+                <Parameter Identifier="ResultExt" Type="Extended" Direction="Output"/>
+                <Parameter Identifier="Overflow" Type="Boolean" Direction="Output"/>
+              </Parameters>
+              <Block>
+                <Execute Statement="Result:= 0"/>
+                <sts:Status.Block Text="'Waiting for acquired signal'" LeaveText="'Done waiting for acquired signal'">
+                  <!--<Suspend>
+                    <Resume.BreakRequest IssueExit="True"/>
+                    <Resume.EventHandle Handle="TriggerTimer"/>
+                  </Suspend>-->
+                  <RepeatUntilLoop Expression="Scope.InternalStatusChanged(TStatusBit.SignalAcquired, SignalAcquiredState)">
+                    <Suspend>
+                      <Resume.BreakRequest IssueExit="True"/>
+                      <Resume.Timed Duration="100000"/>
+                    </Suspend>
+                  </RepeatUntilLoop>
+                  <Execute Statement="Scope.TriggerMode:= TTriggerMode.Stop"/>
+                </sts:Status.Block>
+                <!--<Pause/>-->
+                <Variable Identifier="Count" Type="Integer"/>
+                <Variable Identifier="CountDiv4" Type="Integer"/>
+                <Variable Identifier="MidCount" Type="Integer"/>
+                <Variable Identifier="Min" Type="Integer"/>
+                <Variable Identifier="Max" Type="Integer"/>
+                <Variable Identifier="Sum" Type="Int64"/>
+                <Variable Identifier="TraceName" Type="string" Init="Scope.TraceTypeName(Trace)"/>
+                <sts:Status.Block Text="Format('Capturing %s', TraceName)" LeaveText="Format('Done capturing %s', TraceName)">
+                  <Object.Use Identifier="AcquisitionInfo" Type="TSingleSummedSampleAcquisitionInfo" Expression="Scope.GetSingleSummedSample(Trace, SampleOptions)">
+                    <!--<Execute Statement="TriggerIsReadyState := Scope.InternalStatusState[TStatusBit.TriggerIsReady]"/>-->
+                    <Execute Statement="Scope.Arm"/>
+                    <!--<Execute Statement="SetWaitableTimer(TriggerTimer, TriggerTimerDueTime, 0, True)"/>-->
+                    <Execute Statement="Count:= AcquisitionInfo.Sample.Count"/>
+                    <sts:Status.Block Text="'Taking average'" LeaveText="'Done taking average'">
+                      <Execute Statement="Sum:= AcquisitionInfo.Sample.GetSum(0, Count, Min, Max)"/>
+                    </sts:Status.Block>
+                    <ExitOnAbortRequest/>
+                    <rep:Reporter.Information Text="Format('Min: %d', Min)" Condition="IsVerbose"/>
+                    <rep:Reporter.Information Text="Format('Max: %d', Max)" Condition="IsVerbose"/>
+                    <rep:Reporter.Information Text="Format('Sum: %d', Sum)" Condition="IsVerbose"/>
+                    <rep:Reporter.Information Text="Format('VFactor: %g', AcquisitionInfo.VFactor)" Condition="IsVerbose"/>
+                    <Variable Identifier="VOffset" Type="Extended" Init="AcquisitionInfo.VOffset"/>
+                    <Variable Identifier="InterpolatedVOffset" Type="Extended" Init="VOffset"/>
+                    <Variable Identifier="Adc" Type="Extended" Init="Sum * AcquisitionInfo.VFactor / Count"/>
+                    <Block Condition="DoInterpolate">
+                      <Raise Expression="Exception.Create(Format('Measurment out of range: %.6f', VOffset))" Condition="not OffsetInterpolater.GetValue(VOffset, InterpolatedVOffset)"/>
+                      <rep:Reporter.Information Text="Format('Interpolate %.6f -> %.6f', VOffset, InterpolatedVOffset)" Condition="IsVerbose"/>
+                    </Block>
+                    <rep:Reporter.Information Text="Format('Adc %.6f', Adc)" Condition="IsVerbose"/>
+                    <Execute Statement="ResultExt:= InterpolatedVOffset +  Adc"/>
+                    <Raise Expression="Exception.Create('Rounding error check')" Condition="not ucVOffset.ExtendedToIntValue(ResultExt, Result)"/>
+                    <Execute Statement="Overflow:= (Min &lt; OverflowLow) or (Max &gt; OverflowHigh)"/>
+                    <rep:Reporter.Information Text="Format('MeasurementExt: %g', ResultExt)" Condition="IsVerbose"/>
+                    <rep:Reporter.Information Text="Format('Measurement: %s', ucVOffset.IntValueToStr(Result, TUnitPostFix.Separated, DecimalSeparator))" Condition="IsVerbose"/>
+                  </Object.Use>
+                </sts:Status.Block>
+              </Block>
+            </Function>
+
+            <Function Identifier="ChangeMeasurementSensitivity" Type="Boolean">
+              <Parameters>
+                <Parameter Identifier="Sensitivity" Type="TSensitivity" Direction="Output"/>
+                <Parameter Identifier="ChangeType" Type="TSensitivityChangeType"/>
+              </Parameters>
+              <Block>
+                <Execute Statement="Result:= False"/>
+                <Case Expression="ChangeType">
+                  <On Select="TSensitivityChangeType.Initial">
+                    <Execute Statement="Scope.ConvVDiv[ScopeMeasureTrace]:= Sensitivity.convVDiv"/>
+                    <Execute Statement="Result:= not Assigned(Sensitivity.More)"/>
+                    <Choose>
+                      <When Expression="Result">
+                        <rep:Reporter.Information Text="Format('[%d] Initialized to final sensitivity %s', GetTickCount64, ucVDiv.IntValueToStr(Sensitivity.convVDiv, TUnitPostFix.Separated, DecimalSeparator))"/>
+                      </When>
+                      <Otherwise>
+                        <rep:Reporter.Information Text="Format('[%d] Initialized to sensitivity %s', GetTickCount64, ucVDiv.IntValueToStr(Sensitivity.convVDiv, TUnitPostFix.Separated, DecimalSeparator))"/>
+                      </Otherwise>
+                    </Choose>
+                  </On>
+                  <On Select="TSensitivityChangeType.More">
+                    <Execute Statement="Result:= not Assigned(Sensitivity.More)"/>
+                    <Block Condition="not Result">
+                      <Execute Statement="Sensitivity:= Sensitivity.More"/>
+                      <Execute Statement="Scope.ConvVDiv[ScopeMeasureTrace]:= Sensitivity.convVDiv"/>
+                      <Execute Statement="Result:= not Assigned(Sensitivity.More)"/>
+                      <Choose>
+                        <When Expression="Result">
+                          <rep:Reporter.Information Text="Format('[%d] Changed to final sensitivity %s', GetTickCount64, ucVDiv.IntValueToStr(Sensitivity.convVDiv, TUnitPostFix.Separated, DecimalSeparator))"/>
+                        </When>
+                        <Otherwise>
+                          <rep:Reporter.Information Text="Format('[%d] Changed to a higher sensitivity %s', GetTickCount64, ucVDiv.IntValueToStr(Sensitivity.convVDiv, TUnitPostFix.Separated, DecimalSeparator))"/>
+                        </Otherwise>
+                      </Choose>
+                    </Block>
+                  </On>
+                  <On Select="TSensitivityChangeType.Less">
+                    <Block Condition="Assigned(Sensitivity.Less)">
+                      <Execute Statement="Sensitivity:= Sensitivity.Less"/>
+                      <Execute Statement="Scope.ConvVDiv[ScopeMeasureTrace]:= Sensitivity.convVDiv"/>
+                      <rep:Reporter.Error Text="Format('[%d] Changed to a lower sensitivity %s', GetTickCount64, ucVDiv.IntValueToStr(Sensitivity.convVDiv, TUnitPostFix.Separated, DecimalSeparator))"/>
+                    </Block>
+                  </On>
+                </Case>
+              </Block>
+            </Function>
+          </Procedures>
+          <Block>
+            <Object.Use Identifier="VisaRM" Type="TVisaResourceManager" Expression="TVisaResourceManager.Create">
+              <sts:Status Text="'Connecting to scope: ' + ScopeRN"/>
+              <Object.Use Identifier="ScopeSession" Type="TVisaResource" Expression="VisaRM.OpenResource(ScopeRN, TAccessMode.Exclusive_Lock, 10000)">
+                <Object.Use Identifier="Scope" Type="TSiglentScope" Expression="TSiglentScope.MatchingClass(ScopeSession).Create(ScopeSession)" LocalVariable="false">
+                  <sts:Status Text="'Connecting to powersupply: ' + PsuRN"/>
+                  <Object.Use Identifier="PsuSession" Type="TVisaResource" Expression="VisaRM.OpenResource(PsuRN, TAccessMode.NO_LOCK, 10000)">
+                    <Object.Use Identifier="Psu" Type="TSiglentPowerSupply" Expression="TSiglentPowerSupply.MatchingClass(PsuSession).Create(PsuSession)">
+                      <sts:Status Text="'Connecting to dmm: ' + DmmRN"/>
+                      <Object.Use Identifier="DmmSession" Type="TVisaResource" Expression="VisaRM.OpenResource(DmmRN, TAccessMode.No_Lock, 10000)">
+                        <Object.Use Identifier="Dmm" Type="TKeithleyDMM6500" Expression="TKeithleyDMM6500.Create(DmmSession)">
+                          <Object.Use Identifier="MeasurementQuery" Type="TRealMeasurementQuery" Expression="TRealMeasurementQuery.Create(Dmm)">
+                            <Execute Statement="Psu.Enabled[PsuChargingChannel]:= False"/>
+                            <TryFinally>
+                              <Try>
+                                <rep:Reporter.Information Text="'Measuring voltage'" Markup="Header2"/>
+                                <rep:Reporter.Information Text="'Using scope: ' + Scope.IDN"/>
+                                <rep:Reporter.Information Text="'Using psu: ' + Psu.IDN"/>
+                                <rep:Reporter.Information Text="'Using dmm: ' + Dmm.IDN"/>
+                                <rep:Reporter.Information Text="''"/>
+                                <Execute Statement="TriggerTimer:= CreateWaitableTimer(True)"/>
+                                <sts:Status.Block Text="'Setting scope up'" LeaveText="'Done setting scope up'">
+                                  <Execute Statement="ScopeMeasureTrace:= Scope.ChannelTrace(ScopeMeasureChannel)"/>
+                                  <Execute Statement="ScopeTriggerTrace:= Scope.ChannelTrace(ScopeTriggerChannel)"/>
+                                  <Execute Statement="Scope.CommHeader:= THeaderType.Off"/>
+                                  <Execute Statement="Scope.Timeout:= 10000"/>
+                                  <Execute Statement="Scope.TriggerMode:= TTriggerMode.Stop"/>
+                                  <Execute Statement="SignalAcquiredState := Scope.InternalStatusState[TStatusBit.SignalAcquired]"/>
+                                  <Execute Statement="Scope.TriggerMode:= TTriggerMode.Single"/>
+                                  <Execute Statement="Scope.AcquireWay:= ScopeAcquireWay"/>
+                                  <Execute Statement="Scope.MemorySize:= ScopeMemSize"/>
+                                  <Execute Statement="Scope.ConvTDiv:= Scope.ConvGetCyclesTDiv(convPowerLineFrequency, PowerLineCycles)"/>
+                                  <Execute Statement="Scope.Enabled[TChannelType.CH1]:= (ScopeMeasureChannel = TChannelType.CH1) or (ScopeTriggerChannel = TChannelType.CH1)"/>
+                                  <Execute Statement="Scope.Enabled[TChannelType.CH2]:= (ScopeMeasureChannel = TChannelType.CH2) or (ScopeTriggerChannel = TChannelType.CH2)"/>
+                                  <Execute Statement="Scope.Enabled[TChannelType.CH3]:= (ScopeMeasureChannel = TChannelType.CH3) or (ScopeTriggerChannel = TChannelType.CH3)"/>
+                                  <Execute Statement="Scope.Enabled[TChannelType.CH4]:= (ScopeMeasureChannel = TChannelType.CH4) or (ScopeTriggerChannel = TChannelType.CH4)"/>
+
+                                  <Execute Statement="Scope.ConvAttenuation[ScopeMeasureChannel]:= convMeasureChannelAttenuation"/>
+                                  <Execute Statement="Scope.BandwidthLimit[ScopeMeasureChannel]:= ScopeMeasureChannelBandwidthLimit"/>
+                                  <Execute Statement="Scope.ConvVOffset[ScopeMeasureChannel]:= convMeasureChannelInitialVOffset"/>
+
+                                  <Execute Statement="Scope.ConvAttenuation[ScopeTriggerChannel]:= convTriggerChannelAttenuation"/>
+                                  <Execute Statement="Scope.BandwidthLimit[ScopeTriggerChannel]:= ScopeTriggerChannelBandwidthLimit"/>
+                                  <Execute Statement="Scope.ConvVOffset[ScopeTriggerChannel]:= convTriggerChannelVOffset"/>
+                                  <Execute Statement="Scope.ConvVDiv[ScopeTriggerChannel]:= convTriggerChannelVDiv"/>
+
+                                  <Execute Statement="Scope.TriggerSelect:= ScopeTriggerSelect" Condition="IsNonEmptyString(ScopeTriggerSelect)"/>
+                                  <Execute Statement="Scope.TriggerPattern:= ScopeTriggerPattern" Condition="IsNonEmptyString(ScopeTriggerPattern)"/>
+                                  <Execute Statement="Scope.ConvTriggerDelay:= -(Scope.ConvTDiv * Scope.DivisionsPerScreen) div 2"/>
+                                  <Execute Statement="Scope.SetTriggerSlope(ScopeTriggerChannel, ScopeTriggerSlope)" Condition="IsNonEmptyString(ScopeTriggerSlope)"/>
+                                  <Execute Statement="Scope.SetConvTriggerLevel(ScopeTriggerChannel, convScopeTriggerLevel)"/>
+                                  <!--Pico seconds to 100 nano seconds-->
+                                  <Execute Statement="TriggerTimerDueTime:= -((Scope.ConvTDiv * Scope.DivisionsPerScreen + 99999) div 100000)"/>
+                                </sts:Status.Block>
+
+                                <sts:Status.Block Text="'Setting dmm up'" LeaveText="'Done setting dmm up'">
+                                  <Execute Statement="Dmm.Timeout:= 100000"/>
+                                  <Execute Statement="Dmm.ClearBuffer('defbuffer1')"/>
+                                  <Execute Statement="Dmm.ActiveQuery:= MeasurementQuery"/>
+                                  <Execute Statement="MeasurementQuery.RequestRelativeTime:= True"/>
+                                  <Execute Statement="MeasurementQuery.RequestValue:= True"/>
+                                  <Execute Statement="Dmm.SenseFunction:= TSenseFunction.DCVoltage"/>
+                                </sts:Status.Block>
+
+                                <sts:Status.Block Text="'Setting powersupply up'" LeaveText="'Done setting powersupply up'">
+                                  <Execute Statement="Psu.ConvVoltage[PsuChargingChannel]:= convChargingChannelVoltage"/>
+                                  <Execute Statement="Psu.ConvCurrent[PsuChargingChannel]:= convChargingChannelCurrent"/>
+                                  <Execute Statement="Psu.Enabled[PsuChargingChannel]:= True"/>
+                                </sts:Status.Block>
+
+                                <sts:Status.Block Text="'Reading calibration data'" LeaveText="'Done reading calibration data'">
+                                  <Object.Use Identifier="CalibrationDataManager" Type="TCalibrationDataManager" Expression="TCalibrationDataManager.Create">
+                                    <Execute Statement="CalibrationFilename:= GetFilenameFromBase(ReportingBase, CalibrationFilename)"/>
+                                    <rep:Reporter.Information Text="'Calibration data will be loaded from &quot;' + CalibrationFilename + '&quot;'"/>
+                                    <Execute Statement="CalibrationDataManager.LoadFromFile(CalibrationFilename)"/>
+                                    <Execute Statement="ReverseOffsetInterpolater:= CalibrationDataManager.CreateReverseInterpolater"/>
+                                    <Execute Statement="OffsetInterpolater:= CalibrationDataManager.CreateInterpolater"/>
+                                  </Object.Use>
+                                </sts:Status.Block>
+                                <Variable Identifier="convMeasuredVoltage" Type="ConvInt"/>
+                                <Variable Identifier="Overflow" Type="Boolean"/>
+                                <Variable Identifier="StartTicks" Type="UInt64" Init="GetTickCount64"/>
+                                <Variable Identifier="convMaxVoltage" Type="ConvInt" Init="0"/>
+                                <Variable Identifier="CurrentSensitivity" Type="TSensitivity" Init="SensitivityHead"/>
+                                <Variable Identifier="ResultExt" Type="Extended"/>
+                                <!--<Pause ExitCondition="AbortRequest"/>-->
+                                <sts:Status.Block Text="'Starting to measure'">
+                                  <rep:Reporter.Information Text="'Tick'#9'Time'#9'Scope voltage'#9'Psu voltage'#9'Dmm voltage'" Target="Measurements"/>
+                                  <stm:StateHandler InitialState="Seek">
+                                    <stm:SetState Name="TargetSensitivity" Condition="ChangeMeasurementSensitivity(CurrentSensitivity, TSensitivityChangeType.Initial)"/>
+                                    <sim:Wait Time="msSettlingTime"/>
+                                    <Object.Use Identifier="SampleOptions" Type="TSingleSummedSampleAcquisitionOptions" Expression="TSingleSummedSampleAcquisitionOptions.Create">
+                                      <Execute Statement="SampleOptions.LimitSamples:= Scope.GetCycleSamples(convPowerLineFrequency, PowerLineCycles)"/>
+                                      <Execute Statement="TriggerIsReadyState := Scope.InternalStatusState[TStatusBit.TriggerIsReady]"/>
+                                      <Execute Statement="Scope.Arm"/>
+                                      <Execute Statement="Dmm.RefreshReference"/>
+                                      <RepeatUntilLoop Expression="AbortRequest">
+                                        <sts:Status.Block Text="'Waiting for trigger ready'" LeaveText="'Done waiting for trigger ready'">
+                                          <RepeatUntilLoop Expression="Scope.InternalStatusChanged(TStatusBit.TriggerIsReady, TriggerIsReadyState)">
+                                            <Suspend>
+                                              <Resume.BreakRequest IssueExit="True"/>
+                                              <Resume.Timed Duration="100000"/>
+                                            </Suspend>
+                                          </RepeatUntilLoop>
+                                        </sts:Status.Block>
+                                        <sts:Status.Block Text="'Waiting for dmm measurement'" LeaveText="'Done waiting for dmm measurement'">
+                                          <Execute Statement="Dmm.InitiateModel"/>
+                                          <Execute Statement="Dmm.Wait"/>
+                                          <Execute Statement="MeasurementQuery.Fetch"/>
+                                          <Execute Statement="Dmm.RefreshReference"/>
+                                          <!--<sts:Status Depth="3" Text="Format('%.6f', MeasurementQuery.Value)"/>-->
+                                        </sts:Status.Block>
+                                        <Variable Identifier="convPsuActualPsuVoltage" Type="ConvInt" Init="Psu.ConvActualVoltage[PsuChargingChannel]"/>
+                                        <Variable Identifier="convPsuActualCurrent" Type="ConvInt" Init="Psu.ConvActualCurrent[PsuChargingChannel]"/>
+                                        <stm:HandleStates>
+                                          <stm:State Name="Seek">
+                                            <Execute Statement="convMeasuredVoltage:= TakeScopeMeasurement(ScopeMeasureTrace, SampleOptions, False, ResultExt, Overflow)"/>
+                                            <ExitOnAbortRequest/>
+                                            <Choose>
+                                              <When Expression="Overflow">
+                                                <stm:SetState Name="TargetSensitivity" Condition="ChangeMeasurementSensitivity(CurrentSensitivity, TSensitivityChangeType.Less)"/>
+                                              </When>
+                                              <Otherwise>
+                                                <stm:SetState Name="TargetSensitivity" Condition="ChangeMeasurementSensitivity(CurrentSensitivity, TSensitivityChangeType.More)"/>
+                                                <Execute Statement="Scope.ConvVOffset[ScopeMeasureTrace]:= -convMeasuredVoltage"/>
+                                              </Otherwise>
+                                            </Choose>
+                                            <Execute Statement="Scope.ConvVDiv[ScopeMeasureTrace]:= CurrentSensitivity.convVDiv"/>
+                                          </stm:State>
+                                          <stm:State Name="TargetSensitivity">
+                                            <Execute Statement="convMeasuredVoltage:= TakeScopeMeasurement(ScopeMeasureTrace, SampleOptions, True, ResultExt, Overflow)"/>
+                                            <ExitOnAbortRequest/>
+                                            <Choose>
+                                              <When Expression="Overflow">
+                                                <stm:SetState Name="Seek" Condition="not ChangeMeasurementSensitivity(CurrentSensitivity, TSensitivityChangeType.Less)"/>
+                                              </When>
+                                              <Otherwise>
+                                                <Variable Identifier="CurrentTicks" Type="UInt64" Init="GetTickCount64"/>
+                                                <rep:Reporter.Information Text="Format('%d'#9'%.2f'#9'%s'#9'%s'#9'%e', CurrentTicks, (CurrentTicks - StartTicks)/ 1000, ucVOffset.IntValueToEngineeringStr(convMeasuredVoltage, TUnitPostFix.None, DecimalSeparator), ucActualVoltage.IntValueToEngineeringStr(convPsuActualPsuVoltage, TUnitPostFix.None, DecimalSeparator), MeasurementQuery.Value)" Target="Measurements"/>
+                                                <Variable Identifier="SetVOffset" Type="Extended"/>
+                                                <Raise Expression="Exception.Create('Measurment out of range')" Condition="not ReverseOffsetInterpolater.GetValue(ResultExt, SetVOffset)"/>
+                                                <rep:Reporter.Information Text="Format('Reverse interpolate %.6f -> %.6f', ResultExt, SetVOffset)" Condition="IsVerbose"/>
+                                                <Execute Statement="Scope.VOffset[ScopeMeasureTrace]:= -SetVOffset"/>
+                                                <Execute Statement="convMaxVoltage:= convMeasuredVoltage" Condition="convMeasuredVoltage &gt; convMaxVoltage"/>
+                                                <Variable Identifier="convVoltageDrop" Type="ConvInt" Init="convMaxVoltage - convMeasuredVoltage"/>
+                                                <sts:Status Text="Format('Charge: %s and %s (%s drop)', ucVOffset.IntValueToStr(convMeasuredVoltage, TUnitPostFix.Separated, DecimalSeparator, 5), ucActualCurrent.IntValueToStr(convPsuActualCurrent, TUnitPostFix.Separated, DecimalSeparator, 3), ucVOffset.IntValueToStr(convVoltageDrop, TUnitPostFix.Separated, DecimalSeparator, 3))" Depth="1"/>
+                                                <Block Condition="convVoltageDrop &gt; convBatteryFullVoltageDrop">
+                                                  <rep:Reporter.Information Text="'Battery is full!!'"/>
+                                                  <Exit/>
+                                                </Block>
+                                              </Otherwise>
+                                            </Choose>
+                                          </stm:State>
+                                        </stm:HandleStates>
+                                        <sim:Wait Time="msSettlingTime"/>
+                                      </RepeatUntilLoop>
+                                    </Object.Use>
+                                  </stm:StateHandler>
+                                </sts:Status.Block>
+                              </Try>
+                              <Finally>
+                                <Execute Statement="CloseHandle(TriggerTimer)" Condition="not IsEmpty(TriggerTimer)"/>
+                                <Execute Statement="Psu.Enabled[PsuChargingChannel]:= False"/>
+                                <sim:Wait Time="300"/>
+                                <!-- Just to be safe, the PSU has some time related quirks -->
+                                <Execute Statement="Psu.Enabled[PsuChargingChannel]:= False"/>
+                                <Execute Statement="Dmm.AbortModel"/>
+                                <Free Identifier="OffsetInterpolater"/>
+                                <Free Identifier="ReverseOffsetInterpolater"/>
+                              </Finally>
+                            </TryFinally>
+                          </Object.Use>
+                        </Object.Use>
+                      </Object.Use>
+                    </Object.Use>
+                  </Object.Use>
+                </Object.Use>
+              </Object.Use>
+            </Object.Use>
+          </Block>
+        </Procedure>
+
+      </Procedures>
+
+      <Block>
+        <rep:Reporter.Information Text="'Capture traces'" Markup="Header1"/>
+        <rep:Reporter.Information Text="Format('Time: %s', FormatDateTime('', Now))"/>
+        <rep:Reporter.Information Text="Format('Interpreter version: %s', GetVersionInfo('%d.%d.%d'))"/>
+        <rep:Reporter.Information Text="Format('Script version: %s', ScriptVersion)"/>
+        <rep:Reporter.Information Text="Format('Filename: %s', ScriptFilename)"/>
+        <rep:Reporter.Information Text="Format('Reporting base directory: %s', ReportingBase)" Condition="not IsEmpty(ReportingBase)"/>
+        <rep:Reporter.Information Text="''"/>
+        <TryFinally>
+          <Try>
+            <Block Condition="InputStrings.Count &gt; 0">
+              <rep:Reporter.Information Text="'Comments'" Markup="Header2"/>
+              <ForLoop Indexer="I" From="0" To="InputStrings.Count - 1">
+                <rep:Reporter.Information Text="InputStrings[I]"/>
+              </ForLoop>
+              <rep:Reporter.Information Text="''"/>
+            </Block>
+            <rep:Reporter.Information Text="'Config report'" Markup="Header2"/>
+            <Execute Statement="ReadConfig"/>
+            <rep:Reporter.Information Text="''"/>
+            <Execute Statement="RunMeasurements"/>
+          </Try>
+          <Finally>
+            <rep:Reporter.Information Text="''"/>
+            <rep:Reporter.Information Text="'Done'" Markup="Header2"/>
+            <rep:Reporter.Information Text="Format('Time: %s', FormatDateTime('', Now))"/>
+          </Finally>
+        </TryFinally>
+      </Block>
+    </Procedure>
+  </Procedures>
+
+  <Block>
+    <TryExcept>
+      <Try>
+        <sts:Status.Block Text="'Executing script'" LeaveText="'Done executing script'">
+          <Execute Statement="DoReportVisa:= IsDebugging"/>
+          <Execute Statement="Execute"/>
+        </sts:Status.Block>
+        <sts:Status Text="'Aborted script - reports are not saved automatically'" Condition="AbortRequest"/>
+      </Try>
+      <Except>
+        <On Identifier="E" ClassType="Exception">
+          <rep:Reporter.Error Text="Format('An exception of type %s was raised: %s', E.ClassName, E.Message)"/>
+          <sts:Status Text="'Failed executing script: ' + E.Message"/>
+          <Raise/>
+        </On>
+        <Otherwise>
+          <Raise/>
+        </Otherwise>
+      </Except>
+    </TryExcept>
+  </Block>
+</pkg:Program>

@@ -100,7 +100,7 @@ BatteryFullVoltageDrop=3 mV
   </Type>
 
   <Constants>
-    <Constant Identifier="ScriptVersion" Type="string" Expression="'5.3.34'"/>
+    <Constant Identifier="ScriptVersion" Type="string" Expression="'5.4.39'"/>
     <Constant Identifier="OverflowLow" Type="Integer" Expression="-100"/>
     <Constant Identifier="OverflowHigh" Type="Integer" Expression="100"/>
     <Constant Identifier="msSettlingTime" Type="Integer" Expression="50"/>
@@ -209,7 +209,7 @@ BatteryFullVoltageDrop=3 mV
                     <Resume.BreakRequest IssueExit="True"/>
                     <Resume.EventHandle Handle="TriggerTimer"/>
                   </Suspend>
-                  <RepeatUntilLoop Expression="Scope.StatusChanged(TStatusBit.SignalAcquired, SignalAcquiredState)">
+                  <RepeatUntilLoop Expression="Scope.InternalStatusChanged(TStatusBit.SignalAcquired, SignalAcquiredState)">
                     <Suspend>
                       <Resume.BreakRequest IssueExit="True"/>
                       <Resume.Timed Duration="10000"/>
@@ -319,7 +319,7 @@ BatteryFullVoltageDrop=3 mV
                             <Execute Statement="Scope.CommHeader:= THeaderType.Off"/>
                             <Execute Statement="Scope.Timeout:= 10000"/>
                             <Execute Statement="Scope.TriggerMode:= TTriggerMode.Stop"/>
-                            <Execute Statement="SignalAcquiredState := Scope.StatusState[TStatusBit.SignalAcquired]"/>
+                            <Execute Statement="SignalAcquiredState := Scope.InternalStatusState[TStatusBit.SignalAcquired]"/>
                             <Execute Statement="Scope.TriggerMode:= TTriggerMode.Single"/>
                             <Execute Statement="Scope.AcquireWay:= ScopeAcquireWay"/>
                             <Execute Statement="Scope.MemorySize:= ScopeMemSize"/>
