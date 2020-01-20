@@ -120,7 +120,7 @@ Filename=F:\Software development\Electronica\Projects\BatteryCharger\Calibration
   </Type>
 
   <Constants>
-    <Constant Identifier="ScriptVersion" Type="string" Expression="'5.4.39'"/>
+    <Constant Identifier="ScriptVersion" Type="string" Expression="'5.4.40'"/>
     <Constant Identifier="OverflowLow" Type="Integer" Expression="-100"/>
     <Constant Identifier="OverflowHigh" Type="Integer" Expression="100"/>
     <Constant Identifier="msSettlingTime" Type="Integer" Expression="50"/>
@@ -416,12 +416,23 @@ Filename=F:\Software development\Electronica\Projects\BatteryCharger\Calibration
                                 </sts:Status.Block>
 
                                 <sts:Status.Block Text="'Setting dmm up'" LeaveText="'Done setting dmm up'">
+                                  <Variable Identifier="SelectedFunction" Type="TSenseFunction" Init="TSenseFunction.DCVoltage"/>
                                   <Execute Statement="Dmm.Timeout:= 100000"/>
-                                  <Execute Statement="Dmm.ClearBuffer('defbuffer1')"/>
+                                  <Execute Statement="Dmm.Reset"/>
+                                  <Execute Statement="Dmm.SenseFunction:= SelectedFunction"/>
+                                  <Execute Statement="Dmm.ConvNPLCycles[SelectedFunction]:= convPowerLineCycles"/>
+                                  <Execute Statement="Dmm.InputImpedance[SelectedFunction]:= TInputImpedance.Auto"/>
+                                  <Object.Use Identifier="TriggerModel" Type="TTriggerModel" Expression="TTriggerModel.Create">
+                                    <Variable Identifier="ExternalTriggerNotificationID" Type="UInt32" Init="1"/>
+                                    <Execute Statement="TriggerModel.NewExternalTriggerPulseAction(TTriggerPulse.Low)"/>
+                                    <Execute Statement="TriggerModel.NewExternalTriggerNotificationStimulusAction(ExternalTriggerNotificationID)"/>
+                                    <Execute Statement="TriggerModel.NewNotifyAction(ExternalTriggerNotificationID)"/>
+                                    <Execute Statement="TriggerModel.NewDigitizeAction"/>
+                                    <Execute Statement="Dmm.SetTriggerModel(TriggerModel)"/>
+                                  </Object.Use>
                                   <Execute Statement="Dmm.ActiveQuery:= MeasurementQuery"/>
                                   <Execute Statement="MeasurementQuery.RequestRelativeTime:= True"/>
                                   <Execute Statement="MeasurementQuery.RequestValue:= True"/>
-                                  <Execute Statement="Dmm.SenseFunction:= TSenseFunction.DCVoltage"/>
                                 </sts:Status.Block>
 
                                 <sts:Status.Block Text="'Setting powersupply up'" LeaveText="'Done setting powersupply up'">
